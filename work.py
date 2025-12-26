@@ -49,119 +49,138 @@ df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
 binary_cols = ['htn', 'diabetes', 'fam_htn', 'sp_art']
 df[binary_cols] = df[binary_cols].apply(pd.to_numeric, errors='coerce')
 
+# 2. unsupervised risk phenotype discovery
+cluster_cols = [
+    'sysbp',
+    'diabp',
+    'plgfsflt',
+    'creatinine',
+    'seng',
+    'cysc',
+    'pp_13'
+]
 
-# 2. UNSUPERVISED LABELING (The Scientific Fix)
-# ---------------------------------------------------------
-print("--- Starting Unsupervised Label Generation ---")
+X_cluster = df[cluster_cols]
 
-# Select features for clustering (The medical markers)
-cluster_cols = ['sysbp', 'diabp', 'plgfsflt', 'creatinine', 'SEng', 'cysC', 'pp_13']
-X_cluster = df[cluster_cols].copy()
+# Impute + scale
+cluster_imputer = SimpleImputer(strategy='median')
+X_cluster_imp = cluster_imputer.fit_transform(X_cluster)
 
-# A. Impute Missing Values (The Fix for 'ValueError: Input X contains NaN')
-imputer_cluster = SimpleImputer(strategy='median')
-X_cluster_imputed = imputer_cluster.fit_transform(X_cluster)
+cluster_scaler = StandardScaler()
+X_cluster_scaled = cluster_scaler.fit_transform(X_cluster_imp)
 
-# B. Scale the data (Clustering is sensitive to scale)
-scaler_cluster = StandardScaler()
-X_cluster_scaled = scaler_cluster.fit_transform(X_cluster_imputed)
-
-# C. Let AI find 2 natural groups (Cluster 0 and Cluster 1)
-kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
+# KMeans
+kmeans = KMeans(n_clusters=2, random_state=42, n_init=20)
 df['cluster_label'] = kmeans.fit_predict(X_cluster_scaled)
 
-# D. Identify which cluster is "High Risk"
-# We compare the mean Systolic BP of both groups. The group with higher BP is the Risk group.
-cluster_0_bp = df[df['cluster_label'] == 0]['sysbp'].mean()
-cluster_1_bp = df[df['cluster_label'] == 1]['sysbp'].mean()
+sil = silhouette_score(X_cluster_scaled, df['cluster_label'])
+print(f"Silhouette Score: {sil:.3f}")
 
-print(f"Cluster 0 Mean BP: {cluster_0_bp:.1f}")
-print(f"Cluster 1 Mean BP: {cluster_1_bp:.1f}")
+# 3. IDENTIFY HIGH-RISK PHENOTYPE (CLINICAL WEIGHTING)
+cluster_centers = kmeans.cluster_centers_
 
-if cluster_1_bp > cluster_0_bp:
-    high_risk_label = 1
-    print(">> AI identified Cluster 1 as the HIGH RISK group.")
-else:
-    high_risk_label = 0
-    # Flip labels so 1 is always High Risk for consistency
-    df['cluster_label'] = 1 - df['cluster_label'] 
-    print(">> AI identified Cluster 0 as the HIGH RISK group (Labels flipped).")
+feature_weights = np.array([
+    1.0,  # sysbp
+    1.0,  # diabp
+    1.3,  # plgfsflt (key placental biomarker)
+    1.1,  # creatinine
+    1.0,  # seng
+    1.0,  # cysc
+    1.0   # pp_13
+])
 
-# Assign this as your target variable
-df['preeclampsia_risk'] = df['cluster_label']
+risk_scores = np.dot(cluster_centers, feature_weights)
+high_risk_cluster = np.argmax(risk_scores)
 
-print("\nTarget distribution (AI Discovery):")
-print(df['preeclampsia_risk'].value_counts())
+df['phenotype_group'] = (df['cluster_label'] == high_risk_cluster).astype(int)
 
+print(f"\nHigh-Risk Cluster Identified: Cluster {high_risk_cluster}")
 
-# 3. SUPERVISED TRAINING (Random Forest)
-# ---------------------------------------------------------
-print("\n--- Starting Supervised Model Training ---")
-
-# Prepare features and target
-X = df[numeric_columns + binary_cols].copy()
-y = df['preeclampsia_risk']
-
-# Fill numeric missing values with column medians for the supervised training set
-X = X.fillna(X.median(numeric_only=True))
-
-# Split the data
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, 
-                                                    random_state=42, stratify=y)
-
-# Scale features
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-
-# Train Random Forest model
-rf_model = RandomForestClassifier(n_estimators=200, max_depth=10, 
-                                 random_state=42, class_weight='balanced')
-rf_model.fit(X_train_scaled, y_train)
+# Distribution check
+counts = df['phenotype_group'].value_counts(normalize=True) * 100
+print("\nPhenotype Distribution (%):")
+print(counts)
 
 
-# 4. EVALUATION
-# ---------------------------------------------------------
-# Predictions
-y_pred = rf_model.predict(X_test_scaled)
-y_pred_proba = rf_model.predict_proba(X_test_scaled)[:, 1]
+# 4. MEDICAL PLAUSIBILITY CHECK
+print("\n--- Medical Sanity Check ---")
+print(df.groupby('phenotype_group')[['sysbp','diabp','plgfsflt','creatinine']].mean())
 
-print("\nModel Performance:")
-print("Accuracy:", rf_model.score(X_test_scaled, y_test))
-print("ROC AUC:", roc_auc_score(y_test, y_pred_proba))
-print("\nClassification Report:")
-print(classification_report(y_test, y_pred))
+
+# 5. SUPERVISED PHENOTYPE CLASSIFIER
+print("\n--- Training Phenotype Classifier ---")
+
+X = df[numeric_columns + binary_cols]
+y = df['phenotype_group']
+
+clf_imputer = SimpleImputer(strategy='median')
+X = pd.DataFrame(
+    clf_imputer.fit_transform(X),
+    columns=X.columns
+)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42
+)
+
+rf = RandomForestClassifier(
+    n_estimators=300,
+    max_depth=10,
+    class_weight='balanced',
+    random_state=42
+)
+
+rf.fit(X_train, y_train)
+
+# =========================================================
+# 6. EVALUATION
+# =========================================================
+y_pred = rf.predict(X_test)
+y_prob = rf.predict_proba(X_test)[:,1]
+
+print("\nAccuracy:", rf.score(X_test, y_test))
+print("ROC AUC:", roc_auc_score(y_test, y_prob))
+print("\nClassification Report:\n", classification_report(y_test, y_pred))
 
 # Feature importance
-feature_importance = pd.DataFrame({
-    'feature': X.columns,
-    'importance': rf_model.feature_importances_
-}).sort_values('importance', ascending=False)
+fi = pd.DataFrame({
+    "feature": X.columns,
+    "importance": rf.feature_importances_
+}).sort_values(by="importance", ascending=False)
 
-print("\nTop 10 Most Important Features:")
-print(feature_importance.head(10))
+print("\nTop Risk Drivers:")
+print(fi.head(10))
 
-# Confusion Matrix
-cm = confusion_matrix(y_test, y_pred)
-plt.figure(figsize=(8, 6))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-plt.title('Confusion Matrix')
-plt.ylabel('True Label')
-plt.xlabel('Predicted Label')
-plt.show()
+# =========================================================
+# 7. VISUALIZATIONS
+# =========================================================
+fig, ax = plt.subplots(1, 2, figsize=(14,5))
 
-# Feature importance plot
-plt.figure(figsize=(10, 6))
-sns.barplot(data=feature_importance.head(10), x='importance', y='feature')
-plt.title('Top 10 Feature Importances')
+sns.heatmap(
+    confusion_matrix(y_test, y_pred),
+    annot=True, fmt="d", cmap="Blues", ax=ax[0]
+)
+ax[0].set_title("Confusion Matrix")
+
+sns.barplot(
+    data=fi.head(10),
+    x="importance",
+    y="feature",
+    ax=ax[1]
+)
+ax[1].set_title("Top Biomarkers Driving Risk")
+
 plt.tight_layout()
 plt.show()
 
-# 5. SAVE ARTIFACTS
-# ---------------------------------------------------------
-joblib.dump(rf_model, 'preeclampsia_model.pkl')
-joblib.dump(scaler, 'scaler.pkl')
-joblib.dump(columns, 'feature_columns.pkl')
+# =========================================================
+# 8. SAVE ARTIFACTS
+# =========================================================
+joblib.dump(rf, "preeclampsia_phenotype_model.pkl")
+joblib.dump(cluster_imputer, "cluster_imputer.pkl")
+joblib.dump(cluster_scaler, "cluster_scaler.pkl")
+joblib.dump(clf_imputer, "classifier_imputer.pkl")
+joblib.dump(X.columns.tolist(), "feature_columns.pkl")
 
-print("\nModel saved as 'preeclampsia_model.pkl'")
-print("Ready for competition submission!")
+print("\n Pipeline Complete")
+print("Flow: Unsupervised Phenotyping → Clinical Validation → Rapid Risk Prediction")
