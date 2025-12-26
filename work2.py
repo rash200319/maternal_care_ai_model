@@ -23,7 +23,7 @@ sns.set_theme(style="whitegrid")
 print("✅ Libraries Loaded. Starting Pipeline...")
 
 # Load Dataset
-df = pd.read_csv("Dataset - Updated.csv")
+df = pd.read_csv("data/Dataset - Updated.csv")
 
 # Handling Missing Values (Median Imputation protects against outliers)
 df.fillna(df.median(numeric_only=True), inplace=True)
