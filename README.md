@@ -1,181 +1,188 @@
-# Maternal Care AI — Preeclampsia Risk Prediction 🏥
+# 🧠 Preeclampsia Risk Assessment System  
+### Dual-Model, Clinically Guided Machine Learning Framework
 
-A machine learning system for predicting preeclampsia risk using maternal clinical data, built with scikit-learn's Random Forest classifier. This tool is designed for educational and research purposes only — **not for clinical use**.
+This repository presents a **two-layer machine learning system** for preeclampsia risk assessment, combining **unsupervised phenotyping for clinicians** and **supervised early risk screening for patients**. The system is designed to align with medical knowledge, clinical workflows, and real-world deployment constraints.
 
-## 🌟 Features
-
-- **Comprehensive Risk Assessment**: Predicts preeclampsia risk based on 21+ clinical parameters
-- **Data Preprocessing**: Handles missing values, feature scaling, and data normalization
-- **Model Explainability**: Feature importance analysis to understand risk factors
-- **Easy Integration**: Simple API for making predictions on new patient data
-- **Visual Analytics**: Built-in visualization of model performance and feature importance
 ---
 
-## 📊 Model Performance
+## 📌 Project Overview
 
-The current model achieves the following performance metrics:
-- Accuracy: [To be filled after model training]
-- ROC-AUC: [To be filled after model training]
-- Precision/Recall: [To be filled after model training]
+Preeclampsia is a complex, multi-system hypertensive disorder of pregnancy. Rather than relying on a single predictive model, this project adopts a **dual-dashboard approach**:
 
-## 🚀 Quick Start
+- **Model A (Patient Dashboard)**  
+  Early screening using supervised learning with high sensitivity.
+- **Model B (Doctor Dashboard)**  
+  Phenotype-driven risk stratification using unsupervised clustering followed by supervised classification.
 
-### Prerequisites
-- Python 3.8+
-- pip package manager
+Together, these models support **early detection, clinical interpretation, and risk-based decision making**.
 
-### Installation
+---
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/maternal_care_ai_model.git
-   cd maternal_care_ai_model
-   ```
+## 🧩 System Architecture
+Patient Inputs ──▶ Model A (Supervised NN) ──▶ Risk Score + Action Plan
+│
+▼
+Clinician Inputs ─▶ Model B (Clustering + RF) ─▶ Phenotype-Driven Risk Stratification
 
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   # Windows
-   venv\Scripts\activate
-   # Mac/Linux
-   source venv/bin/activate
-   ```
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+---
 
-### Training the Model
+## 📂 Dataset Description
 
-Run the training script:
+### Core Columns
+
+**Demographic & Anthropometric**
+- `age`, `gest_age`, `height`, `weight`, `bmi`
+
+**Vital Signs**
+- `sysbp`, `diabp`
+
+**Laboratory & Biomarkers**
+- `hb`, `pcv`, `tsh`, `platelet`, `creatinine`
+- `plgf:sflt`, `seng`, `cysc`, `pp_13`, `glycerides`
+
+**Binary Clinical Risk Factors**
+- `htn`, `diabetes`, `fam_htn`, `sp_art`
+
+**Lifestyle & Behavioral**
+- `occupation`, `diet`, `activity`, `sleep`
+
+---
+
+## 🧠 Model A – BioFusion-NN (Patient Dashboard)
+
+### Objective
+Early **high-sensitivity screening** of preeclampsia risk using readily available clinical and contextual features.
+
+### Key Characteristics
+- Supervised **Neural Network (MLPClassifier)**
+- Optimized for **recall (sensitivity)**
+- Designed for **patient-facing dashboards**
+- Includes **explainability (SHAP)**
+
+### Feature Engineering
+- Mean Arterial Pressure (MAP)
+- Synthetic environmental factors:
+  - Heat Exposure
+  - Air Pollution
+  - Access to Care
+- Domain knowledge injection (e.g., heat sensitivity in hypertensive patients)
+
+### Training Strategy
+- 80/20 train-test split (stratified)
+- 5-fold cross-validated grid search
+- Recall-optimized hyperparameter tuning
+
+### Evaluation Metrics
+- ROC-AUC
+- Precision-Recall Curve (preferred for medical screening)
+- Classification Report
+
+### Explainability
+- Random Forest surrogate model
+- SHAP summary plots for global feature importance
+
+### Deployment Output
+- Serialized model: `biofusion_model_v1.pkl`
+- Risk categories:
+  - 🟢 Low Risk – Routine Care
+  - 🟡 Moderate Risk – Increased Monitoring
+  - 🔴 High Risk – Immediate Intervention
+
+---
+
+## 🧠 Model B – PE-PhenoRisk (Doctor Dashboard)
+
+### Objective
+Discover **latent clinical phenotypes** of preeclampsia and enable **rapid phenotype-based risk prediction**.
+
+### Step 1: Unsupervised Phenotyping
+- **K-Means clustering (k=2)**
+- Features:
+  - `sysbp`, `diabp`
+  - `plgfsflt`, `pp_13`
+  - `creatinine`, `seng`, `cysc`
+- Median imputation + z-score scaling
+- Silhouette score used for cluster quality assessment
+
+### Step 2: Risk Phenotype Assignment
+- Cluster centers interpreted as representative patient profiles
+- Weighted scoring of biomarkers
+- Clusters labeled:
+  - `0` → Low Risk Phenotype
+  - `1` → High Risk Phenotype
+
+### Step 3: Supervised Classification
+- Random Forest classifier
+- Inputs: All numeric + binary features
+- Target: Phenotype group
+- Class-balanced training
+
+### Model Outputs
+- Phenotype label
+- Risk probability
+- Feature importance (clinical interpretability)
+
+### Deployment Artifacts
+- `preeclampsia_phenotype_model.pkl`
+- Preprocessing objects (scalers, imputers)
+- Feature schema
+
+---
+
+## 📊 Model Evaluation Summary
+
+| Model | Primary Goal | Key Metric | Performance |
+|-----|-------------|-----------|-------------|
+| Model A | Early Screening | Recall / PR-AUC | High |
+| Model B | Clinical Stratification | ROC-AUC | ~0.96 |
+
+---
+
+## 🖥️ Dashboards
+
+### Patient Dashboard
+- Simple input form
+- Risk probability + action plan
+- Powered by **Model A**
+
+### Doctor Dashboard
+- Advanced biomarker inputs
+- Phenotype interpretation
+- Feature importance & cluster insights
+- Powered by **Model B**
+
+---
+
+## ⚠️ Clinical Disclaimer
+
+This project is intended for **research and educational purposes only**.  
+It is **not a diagnostic tool** and should not replace professional medical judgment.
+
+---
+
+## 🚀 Getting Started
+
+### Install Dependencies
 ```bash
-python work.py
+pip install -r requirements.txt
 ```
+### 🏆 Key Contributions
 
-This will:
-1. Load and preprocess the data
-2. Train the Random Forest classifier
-3. Save the model and scaler as `.pkl` files
-4. Generate performance metrics and visualizations
+- Dual-model clinical ML architecture
 
-## � Data Dictionary
+- Phenotype-driven risk stratification
 
-| Feature       | Description                          | Type    | Range/Values        |
-|---------------|--------------------------------------|---------|---------------------|
-| age           | Maternal age                         | Numeric | 18-45 years         |
-| gest_age      | Gestational age                      | Numeric | Weeks               |
-| height        | Height in cm                         | Numeric | 140-200 cm          |
-| weight        | Weight in kg                         | Numeric | 40-120 kg           |
-| bmi           | Body Mass Index                      | Numeric | 18-40 kg/m²         |
-| sysbp         | Systolic Blood Pressure              | Numeric | 90-200 mmHg         |
-| diabp         | Diastolic Blood Pressure             | Numeric | 60-120 mmHg         |
-| hb            | Hemoglobin level                     | Numeric | g/dL                |
-| ...           | ... (complete with all features)     | ...     | ...                 |
+- High-recall patient screening
 
-## 🤖 Making Predictions
+- Explainable AI for maternal health
 
-### Programmatic Usage
+- Deployment-ready pipeline
 
-```python
-from joblib import load
-import pandas as pd
+### 👩‍⚕️ Author
 
-# Load the trained model and scaler
-model = load('models/preeclampsia_model.pkl')
-scaler = load('models/scaler.pkl')
-feature_columns = load('models/feature_columns.pkl')
+Rashmi Paboda
+Computer Science & Engineering
+Maternal Health AI Research Project
 
-def predict_preeclampsia_risk(patient_data):
-    """Predict preeclampsia risk for a new patient."""
-    # Convert to DataFrame and ensure correct column order
-    patient_df = pd.DataFrame([patient_data])[feature_columns]
-    
-    # Scale the features
-    scaled_features = scaler.transform(patient_df)
-    
-    # Get prediction probability
-    risk_probability = model.predict_proba(scaled_features)[0][1]
-    
-    return {
-        'risk_probability': float(risk_probability),
-        'risk_category': 'High' if risk_probability > 0.5 else 'Low'
-    }
-
-# Example usage
-patient = {
-    'age': 28,
-    'gest_age': 24,
-    'height': 165,
-    'weight': 70,
-    'bmi': 25.7,
-    'sysbp': 120,
-    'diabp': 80,
-    'hb': 12.5,
-    'pcv': 36,
-    'tsh': 2.1,
-    'platelet': 250,
-    'creatinine': 0.8,
-    'plgfsflt': 50,
-    'seng': 10,
-    'cysc': 0.9,
-    'pp_13': 5,
-    'glycerides': 120,
-    'htn': 0,
-    'diabetes': 0,
-    'fam_htn': 0,
-    'sp_art': 0
-}
-result = predict_preeclampsia_risk(patient)
-print(f"Preeclampsia Risk: {result['risk_probability']*100:.1f}% ({result['risk_category']})")
-```
-
-## 📊 Model Interpretation
-
-The model provides feature importance scores to help understand which factors contribute most to the risk prediction:
-
-```python
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-feature_importance = pd.DataFrame({
-    'feature': feature_columns,
-    'importance': model.feature_importances_
-}).sort_values('importance', ascending=False)
-
-plt.figure(figsize=(10, 6))
-sns.barplot(x='importance', y='feature', data=feature_importance)
-plt.title('Feature Importance for Preeclampsia Prediction')
-plt.tight_layout()
-plt.savefig('feature_importance.png')
-```
-
-## 🔧 Notes / Troubleshooting
-
-- The scripts expect numeric columns; some binary/categorical columns (e.g., `htn`, `diabetes`, `fam_htn`, `sp_art`) are coerced to numeric before imputing missing values.
-- If you see errors related to `median()` or `fillna()`, ensure columns are numeric (the repository contains a fix to coerce binaries and use `median(numeric_only=True)`).
-- This model is for experimentation. Do not use in production without clinical validation and regulatory approvals.
-
-## 🧪 Notebooks
-
-Open `work.ipynb` and `work2.ipynb` to interactively explore preprocessing, feature importance plots, and other experiments.
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📬 Contact
-
-For questions or feedback, please open an issue or contact the repository maintainer.
-
-## 🙏 Acknowledgments
-
-- Data provided by [Source Name]
-- Built with scikit-learn, pandas, and other open-source libraries
-- Special thanks to contributors and researchers in maternal health
-
----
-
-<div align="center">
-  Made with love for better maternal healthcare
-</div>
+### ⭐ If you find this project useful, consider starring the repository!
