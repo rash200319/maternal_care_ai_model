@@ -37,7 +37,6 @@ expected_columns = ['age', 'gest_age', 'height', 'weight', 'bmi', 'sysbp', 'diab
 missing = set(expected_columns) - set(df.columns)
 if missing:
     raise ValueError(f" Missing required columns: {missing}")
-df_stage2 = df_stage2[expected_columns] 
 
 # Convert all columns to numeric (handle any parsing issues)
 numeric_columns = ['age', 'gest_age', 'height', 'weight', 'bmi', 'sysbp', 'diabp', 
